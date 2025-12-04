@@ -14,7 +14,7 @@ const char* ssid = "b401_wifi";
 const char* password = "b401juara1";
 
 // Konfigurasi Github
-const String firmwareURL = "https://raw.githubusercontent.com/anisamsrh/rtos-ota/tree/main/firmware/firmware.bin";
+const String firmwareURL = "https://github.com/anisamsrh/rtos-ota/raw/refs/heads/main/firmware/firmware.bin";
 const String currentVersion = "1.0.0"; // firmware version
 
 // Konfigurasi PZEM-004T
@@ -350,6 +350,14 @@ void sendDataTask(void *parameter) {
         
         if (httpResponseCode > 0) {
           String response = http.getString();
+          Serial.println("Server Response: " + response);
+          
+          // LOGIKA PEMICU OTA
+          if (response == "RESTART") {
+              Serial.println("Update Command Diterima! Restarting...");
+              delay(1000); // Beri waktu serial print selesai
+              ESP.restart(); // <--- INI AKAN MEMICU LOGIKA OTA DI SETUP()
+          }
           Serial.printf("✓ Data terkirim ke Node-RED! Response: %d\n", httpResponseCode);
           Serial.println("Response: " + response);
           
