@@ -14,7 +14,7 @@ const char* ssid = "b401_wifi";
 const char* password = "b401juara1";
 
 // Konfigurasi Github
-const String firmwareURL = "https://raw.githubusercontent.com/USERNAME/REPO/main/firmware.bin";
+const String firmwareURL = "https://raw.githubusercontent.com/anisamsrh/rtos-ota/tree/main/firmware/firmware.bin";
 const String currentVersion = "1.0.0"; // firmware version
 
 // Konfigurasi PZEM-004T
