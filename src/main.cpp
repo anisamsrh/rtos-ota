@@ -2,7 +2,7 @@
 #include <WiFi.h>
 #include <HTTPClient.h>
 #include <HTTPUpdate.h>
-#include <PZEM004Tv30.h>
+// #include <PZEM004Tv30.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/queue.h"
@@ -25,7 +25,7 @@ const String versionURL = "https://raw.githubusercontent.com/anisamsrh/rtos-ota/
 // Konfigurasi Pin Relay
 #define RELAYPIN 25
 
-PZEM004Tv30 pzem(Serial2, PZEM_RX_PIN, PZEM_TX_PIN);
+// PZEM004Tv30 pzem(Serial2, PZEM_RX_PIN, PZEM_TX_PIN);
 
 // Node-RED endpoint
 const char* nodeRedURL = "http://192.168.200.118:1880/sensor";
@@ -363,17 +363,19 @@ void sendDataTask(void *parameter) {
         http.setTimeout(5000);
         
         // Buat JSON payload
-        String jsonData = "{";
-        jsonData += "\"voltage\":" + String(data.voltage, 2) + ",";
-        jsonData += "\"current\":" + String(data.current, 3) + ",";
-        jsonData += "\"power\":" + String(data.power, 2) + ",";
-        jsonData += "\"energy\":" + String(data.energy, 3) + ",";
-        jsonData += "\"frequency\":" + String(data.frequency, 1) + ",";
-        jsonData += "\"powerFactor\":" + String(data.powerFactor, 2) + ",";
-        jsonData += "\"timestamp\":" + String(data.timestamp);
-        jsonData += "}";
+        char jsonBuffer[256]; // Buffer statis
+        snprintf(jsonBuffer, sizeof(jsonBuffer), 
+            "{\"voltage\":%.2f,\"current\":%.3f,\"power\":%.2f,\"energy\":%.3f,\"frequency\":%.1f,\"pf\":%.2f,\"ts\":%lu}",
+            data.voltage,
+            data.current,
+            data.power,
+            data.energy,
+            data.frequency,
+            data.powerFactor,
+            data.timestamp
+        );
         
-        int httpResponseCode = http.POST(jsonData);
+        int httpResponseCode = http.POST(jsonBuffer);
         
         if (httpResponseCode > 0) {
           String response = http.getString();
