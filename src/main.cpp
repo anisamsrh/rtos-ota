@@ -15,7 +15,7 @@ const char* password = "b401juara1";
 
 // Konfigurasi Github
 const String firmwareURL = "https://raw.githubusercontent.com/anisamsrh/rtos-ota/main/firmware/firmware.bin";
-const String currentVersion = "1.0.0"; // firmware version
+const String currentVersion = "1.0.2"; // firmware version
 const String versionURL = "https://raw.githubusercontent.com/anisamsrh/rtos-ota/main/firmware/version.txt";
 
 // Konfigurasi PZEM-004T
@@ -96,7 +96,7 @@ void updateFirmware() {
     return;
   }
   http.end();
-  
+
   // Callback untuk memantau progress
   httpUpdate.onProgress([](int cur, int total) {
       Serial.printf("Progress: %d%%\n", (cur * 100) / total);
@@ -514,7 +514,7 @@ void setup() {
   xTaskCreatePinnedToCore(
     sendDataTask,
     "SendData",
-    8192,
+    12288,
     NULL,
     1,      // Priority sedang
     NULL,
