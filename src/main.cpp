@@ -1,6 +1,7 @@
 #include <Arduino.h>
 #include <WiFi.h>
 #include <HTTPClient.h>
+#include <HTTPUpdate.h>
 #include <PZEM004Tv30.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -11,6 +12,10 @@
 // Konfigurasi WiFi
 const char* ssid = "b401_wifi";
 const char* password = "b401juara1";
+
+// Konfigurasi Github
+const String firmwareURL = "https://raw.githubusercontent.com/USERNAME/REPO/main/firmware.bin";
+const String currentVersion = "1.0.0"; // firmware version
 
 // Konfigurasi PZEM-004T
 #define PZEM_RX_PIN 16
@@ -57,6 +62,36 @@ const uint8_t pzemRequestCmd[] = {0x01, 0x04, 0x00, 0x00, 0x00, 0x0A, 0x70, 0x0D
 // Data terakhir yang berhasil dikirim
 PZEMData lastSentData = {0, 0, 0, 0, 0, 0, 0, false};
 bool hasLastData = false;
+
+void updateFirmware() {
+  Serial.println("Memulai proses update OTA...");
+  
+  WiFiClientSecure client;
+  // PENTING: Melewati verifikasi sertifikat SSL (GitHub pakai HTTPS)
+  // Untuk produksi, sebaiknya gunakan setCACert dengan sertifikat root GitHub.
+  client.setInsecure(); 
+
+  // Callback untuk memantau progress
+  httpUpdate.onProgress([](int cur, int total) {
+      Serial.printf("Progress: %d%%\n", (cur * 100) / total);
+  });
+
+  t_httpUpdate_return ret = httpUpdate.update(client, firmwareURL);
+
+  switch (ret) {
+    case HTTP_UPDATE_FAILED:
+      Serial.printf("HTTP_UPDATE_FAILED Error (%d): %s\n", httpUpdate.getLastError(), httpUpdate.getLastErrorString().c_str());
+      break;
+
+    case HTTP_UPDATE_NO_UPDATES:
+      Serial.println("HTTP_UPDATE_NO_UPDATES");
+      break;
+
+    case HTTP_UPDATE_OK:
+      Serial.println("Update berhasil! Restarting...");
+      break;
+  }
+}
 
 // Konfigurasi Power Management untuk Tickless
 void setupPowerManagement() {
@@ -371,11 +406,6 @@ void setup() {
   // Inisialisasi Serial2 untuk PZEM
   Serial2.begin(9600, SERIAL_8N1, PZEM_RX_PIN, PZEM_TX_PIN);
   
-  Serial.println("\n========================================");
-  Serial.println("ESP32 PZEM-004T Tickless Mode");
-  Serial.println("dengan Smart WiFi & Deteksi Perubahan");
-  Serial.println("========================================");
-  
   // Setup Power Management (Tickless)
   setupPowerManagement();
   
@@ -397,6 +427,16 @@ void setup() {
     Serial.println(WiFi.localIP());
     Serial.print("Node-RED URL: ");
     Serial.println(nodeRedURL);
+    
+    // === [SISIPKAN OTA DI SINI] ===
+    // Cek update sebelum task lain dibuat.
+    // Jika ada update, fungsi ini akan melakukan restart otomatis setelah selesai.
+    // Pastikan disable sleep dulu sebentar untuk kestabilan download
+    WiFi.setSleep(false); 
+    updateFirmware(); 
+    WiFi.setSleep(true); // Kembalikan ke mode hemat daya jika tidak ada update
+    // ==============================
+
     Serial.println("✓ WiFi modem sleep: ENABLED");
   } else {
     Serial.println("\n⚠ WiFi tidak terhubung saat startup");
