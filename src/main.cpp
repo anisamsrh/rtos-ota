@@ -9,13 +9,13 @@
 #include "esp_sleep.h"
 
 // --- Konfigurasi ---
-const char* ssid = "b401_wifi";
-const char* password = "b401juara1";
+const char* ssid = "ITS-WIFI-TW2";
+const char* password = "itssurabaya";
 
 const String firmwareURL = "https://raw.githubusercontent.com/anisamsrh/rtos-ota/v2/firmware/firmware.bin";
 const String versionURL = "https://raw.githubusercontent.com/anisamsrh/rtos-ota/v2/firmware/version.txt";
-const String currentVersion = "1.0.2";
-const char* nodeRedURL = "http://192.168.200.118:1880/sensor";
+const String currentVersion = "1.0.4";
+const char* nodeRedURL = "http://10.4.68.11:1880/sensor";
 
 #define PZEM_RX_PIN 16
 #define PZEM_TX_PIN 17
@@ -90,6 +90,7 @@ void updateFirmware() {
     Serial.printf("Update found: %s -> %s\n", currentVersion.c_str(), newVersion.c_str());
   } else {
     http.end();
+    Serial.println("Cannot Access");
     return;
   }
   http.end();
