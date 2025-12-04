@@ -14,7 +14,7 @@ const char* ssid = "b401_wifi";
 const char* password = "b401juara1";
 
 // Konfigurasi Github
-const String firmwareURL = "https://github.com/anisamsrh/rtos-ota/raw/refs/heads/main/firmware/firmware.bin";
+const String firmwareURL = "https://raw.githubusercontent.com/anisamsrh/rtos-ota/main/firmware/firmware.bin";
 const String currentVersion = "1.0.0"; // firmware version
 
 // Konfigurasi PZEM-004T
@@ -75,6 +75,7 @@ void updateFirmware() {
   httpUpdate.onProgress([](int cur, int total) {
       Serial.printf("Progress: %d%%\n", (cur * 100) / total);
   });
+  httpUpdate.setFollowRedirects(HTTPC_FORCE_FOLLOW_REDIRECTS);
 
   t_httpUpdate_return ret = httpUpdate.update(client, firmwareURL);
 
