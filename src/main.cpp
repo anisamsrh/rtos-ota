@@ -48,6 +48,12 @@ struct PZEMData {
   bool isValid;
 };
 
+// Command Modbus untuk membaca 10 register mulai dari alamat 0x0000
+// Format: [SlaveID, FuncCode, StartAddrHi, StartAddrLo, NumRegsHi, NumRegsLo, CRC_Lo, CRC_Hi]
+// PZEM Default Slave ID = 0x01
+const uint8_t pzemRequestCmd[] = {0x01, 0x04, 0x00, 0x00, 0x00, 0x0A, 0x70, 0x0D};
+
+
 // Data terakhir yang berhasil dikirim
 PZEMData lastSentData = {0, 0, 0, 0, 0, 0, 0, false};
 bool hasLastData = false;
@@ -166,32 +172,83 @@ void readSensorTask(void *parameter) {
     vTaskDelayUntil(&xLastWakeTime, xFrequency);
     
     // Baca semua parameter dari PZEM
-    float voltage = pzem.voltage();
-    float current = pzem.current();
-    float power = pzem.power();
-    float energy = pzem.energy();
-    float frequency = pzem.frequency();
-    float pf = pzem.pf();
+    // 1. Bersihkan buffer serial sebelumnya (flush)
+    while (Serial2.available()) Serial2.read();
+    
+    // 2. Kirim Request (8 bytes)
+    Serial2.write(pzemRequestCmd, 8);
+    
+    // 3. Tunggu respon (Timeout 100ms)
+    unsigned long startTime = millis();
+    // Respon Modbus: SlaveID(1) + Func(1) + ByteCount(1) + Data(20) + CRC(2) = 25 bytes
+    while (Serial2.available() < 25) {
+      if (millis() - startTime > 100) { //timeout
+        Serial.println("✗ Gagal membaca sensor PZEM-004T");
+        Serial.println("Timeout waiting for Modbus response\n");
+
+        data.isValid = false;
+        data.timestamp = millis();
+        xQueueSend(sensorQueue, &data, pdMS_TO_TICKS(100));
+        return;
+      }
+    }
+    
+    // 4. Baca Respon
+    uint8_t buffer[25];
+    Serial2.readBytes(buffer, 25);
+    
+    // 5. Validasi Header & CRC sederhana (Opsional tapi disarankan)
+    if (buffer[0] != 0x01 || buffer[1] != 0x04) // Salah alamat/fungsi
+    {
+      Serial.println("✗ Gagal membaca sensor PZEM-004T");
+      Serial.println("Address is wrong\n");
+
+      data.isValid = false;
+      data.timestamp = millis();
+      xQueueSend(sensorQueue, &data, pdMS_TO_TICKS(100));
+      return;
+    }
+    
+    // 6. Parsing Data (Modbus Big Endian to Little Endian ESP32)
+    // Voltage (Register 0x0000) - 0.1V resolution
+    uint16_t temp;
+    
+    temp = (buffer[3] << 8) | buffer[4];
+    data.voltage = temp * 0.1;
+    
+    // Current (Register 0x0001 - 0x0002) - 0.001A resolution - 32bit
+    uint32_t temp32 = ((uint32_t)buffer[5] << 8) | buffer[6] | ((uint32_t)buffer[7] << 24) | ((uint32_t)buffer[8] << 16); 
+    // Note: PZEM V3 format utk 32bit agak unik, kadang perlu swap word. 
+    // Biasanya: LowWord di addr rendah, HighWord di addr tinggi.
+    // Mari gunakan cara parsing standar PZEM V3:
+    data.current = ((uint32_t)((buffer[6] | (buffer[5] << 8))) | ((uint32_t)(buffer[8] | (buffer[7] << 8)) << 16)) * 0.001;
+
+    // Power (Register 0x0003 - 0x0004) - 0.1W resolution
+    data.power = ((uint32_t)((buffer[10] | (buffer[9] << 8))) | ((uint32_t)(buffer[12] | (buffer[11] << 8)) << 16)) * 0.1;
+    
+    // Energy (Register 0x0005 - 0x0006) - 1Wh resolution
+    data.energy = ((uint32_t)((buffer[14] | (buffer[13] << 8))) | ((uint32_t)(buffer[16] | (buffer[15] << 8)) << 16)) * 1.0;
+    
+    // Frequency (Register 0x0007) - 0.1Hz
+    temp = (buffer[17] << 8) | buffer[18];
+    data.frequency = temp * 0.1;
+    
+    // PF (Register 0x0008) - 0.01
+    temp = (buffer[19] << 8) | buffer[20];
+    data.powerFactor = temp * 0.01;
+    
+    data.isValid = true;
     
     // Cek apakah pembacaan valid
-    if (!isnan(voltage) && !isnan(current)) {
-      data.voltage = voltage;
-      data.current = current;
-      data.power = power;
-      data.energy = energy;
-      data.frequency = frequency;
-      data.powerFactor = pf;
-      data.timestamp = millis();
-      data.isValid = true;
-      
+    if (data.isValid) {
       // Tampilkan data di Serial Monitor
       Serial.println("========== DATA PZEM-004T ==========");
-      Serial.printf("Tegangan    : %.2f V\n", voltage);
-      Serial.printf("Arus        : %.3f A\n", current);
-      Serial.printf("Daya        : %.2f W\n", power);
-      Serial.printf("Energi      : %.3f kWh\n", energy);
-      Serial.printf("Frekuensi   : %.1f Hz\n", frequency);
-      Serial.printf("Power Factor: %.2f\n", pf);
+      Serial.printf("Tegangan    : %.2f V\n", data.voltage);
+      Serial.printf("Arus        : %.3f A\n", data.current);
+      Serial.printf("Daya        : %.2f W\n", data.power);
+      Serial.printf("Energi      : %.3f kWh\n", data.energy);
+      Serial.printf("Frekuensi   : %.1f Hz\n", data.frequency);
+      Serial.printf("Power Factor: %.2f\n", data.powerFactor);
       Serial.println("====================================");
       
       // Cek apakah ada perubahan signifikan
