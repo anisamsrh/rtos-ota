@@ -16,6 +16,7 @@ const char* password = "b401juara1";
 // Konfigurasi Github
 const String firmwareURL = "https://raw.githubusercontent.com/anisamsrh/rtos-ota/main/firmware/firmware.bin";
 const String currentVersion = "1.0.0"; // firmware version
+const String versionURL = "https://raw.githubusercontent.com/anisamsrh/rtos-ota/main/firmware/version.txt";
 
 // Konfigurasi PZEM-004T
 #define PZEM_RX_PIN 16
@@ -71,6 +72,31 @@ void updateFirmware() {
   // Untuk produksi, sebaiknya gunakan setCACert dengan sertifikat root GitHub.
   client.setInsecure(); 
 
+  HTTPClient http;
+
+  // 1. Cek Versi dulu
+  http.begin(client, versionURL);
+  int httpCode = http.GET();
+
+  if (httpCode == HTTP_CODE_OK) {
+    String newVersion = http.getString();
+    newVersion.trim(); // Hapus spasi/newline
+
+    Serial.printf("Versi saat ini: %s, Versi server: %s\n", currentVersion.c_str(), newVersion.c_str());
+    if (newVersion.equals(currentVersion)) {
+      Serial.println("✓ Firmware sudah paling baru. Tidak perlu update.");
+      http.end();
+      return; // KELUAR, jangan update
+    } else {
+      Serial.println("Versi baru ditemukan! Memulai update...");
+    }
+  } else {
+    Serial.println("✗ Gagal mengambil info versi.");
+    http.end();
+    return;
+  }
+  http.end();
+  
   // Callback untuk memantau progress
   httpUpdate.onProgress([](int cur, int total) {
       Serial.printf("Progress: %d%%\n", (cur * 100) / total);
